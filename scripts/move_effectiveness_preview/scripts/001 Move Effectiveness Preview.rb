@@ -22,6 +22,11 @@ module EffectivenessPreview
   DISPLAY_MODE = 2
   # Show or hide the neutral preview "Efficace (x1)" in every display mode.
   SHOW_WHEN_NEUTRAL = false
+  # Limit the preview to specific Pokedex states:
+  # :ALL = always show the preview
+  # :SEEN = only show it for creatures already seen
+  # :CAUGHT = only show it for creatures already caught
+  SHOW_FOR_CREATURES = :ALL
   # Text color used by the effectiveness preview in every display mode.
   TEXT_COLOR = 9
   # Label used when different targets have different multipliers.
@@ -84,20 +89,45 @@ module EffectivenessPreview
     targets.size > 1
   end
 
-  # Return the multipliers shown by the preview in target order.
-  # Duplicate values are collapsed, but the original target order is preserved.
-  # This method is shared by every display mode.
+  # Tell if the preview can be shown for a specific target.
+  # @param target [PFM::PokemonBattler]
+  # @param setting [String]
+  # @return [Boolean]
+  def show_preview_for_target?(target, setting)
+    return true if setting == 'ALL'
+    return false unless $pokedex
+
+    case setting
+    when 'CAUGHT' then $pokedex.creature_caught?(target.db_symbol)
+    when 'SEEN' then $pokedex.creature_seen?(target.db_symbol)
+    else true
+    end
+  end
+
+  # Return the previewed target values in target order.
+  # Allowed targets return their multiplier. Hidden targets return nil so the
+  # preview can display a "?" placeholder in their position.
+  # When every target is allowed, duplicate values are still collapsed in
+  # order to keep the original compact behaviour.
   # @param move [Battle::Move, nil]
   # @param user [PFM::PokemonBattler, nil]
   # @param logic [Battle::Logic, nil]
-  # @return [Array<Float>, nil]
+  # @return [Array<Float, nil>, nil]
   def multipliers_for(move, user, logic)
     return unless move && user && logic
     with_silent_move_logs do
       targets = preview_targets(move, user, logic)
       next if targets.empty?
 
-      targets.map { |target| multiplier_for(move, user, target) }.uniq
+      setting = SHOW_FOR_CREATURES.to_s.upcase
+      values = targets.map do |target|
+        next multiplier_for(move, user, target) if show_preview_for_target?(target, setting)
+
+        nil
+      end
+      next values if values.any?(&:nil?)
+
+      values.uniq
     end
   end
 
@@ -127,19 +157,26 @@ module EffectivenessPreview
     ext_text(8999, 22)
   end
 
-  # Build the final preview text from the multiplier list.
+  # Build the final preview text from the target values list.
+  # Hidden targets are shown as "?" while keeping the real target order.
   # In 3v3, mixed values use a compact "x1 / x2 / x4" format to save space.
-  # @param multipliers [Array<Float>]
+  # @param multipliers [Array<Float, nil>]
   # @param logic [Battle::Logic, nil]
   # @return [String, nil]
   def build_text(multipliers, logic)
+    known_multipliers = multipliers.compact
+    return if known_multipliers.empty?
+    return if known_multipliers.all? { |multiplier| multiplier == 1.0 } && !SHOW_WHEN_NEUTRAL
+
     displayed_multipliers = displayed_multipliers_for(multipliers, logic)
     return if displayed_multipliers.empty?
 
-    values = displayed_multipliers.map { |multiplier| "x#{format_multiplier(multiplier)}" }.join(' / ')
+    values = displayed_multipliers.map do |multiplier|
+      multiplier.nil? ? '?' : "x#{format_multiplier(multiplier)}"
+    end.join(' / ')
     return values if compact_variable_text?(multipliers, logic)
 
-    label = multipliers.size == 1 ? label_for(multipliers.first) : VARIABLE_TEXT
+    label = displayed_multipliers.size == 1 ? label_for(known_multipliers.first) : VARIABLE_TEXT
     "#{label} (#{values})"
   end
 
@@ -172,7 +209,6 @@ module EffectivenessPreview
   def preview_text_for(move, user, logic)
     multipliers = multipliers_for(move, user, logic)
     return unless multipliers
-    return if multipliers == [1.0] && !SHOW_WHEN_NEUTRAL
 
     build_text(multipliers, logic)
   end
@@ -187,7 +223,6 @@ module EffectivenessPreview
   def preview_data_for(move, user, logic)
     multipliers = multipliers_for(move, user, logic)
     return [nil, nil] unless multipliers
-    return [multipliers, nil] if multipliers == [1.0] && !SHOW_WHEN_NEUTRAL
 
     [multipliers, build_text(multipliers, logic)]
   end
@@ -201,11 +236,12 @@ module EffectivenessPreview
     logic&.battle_info&.vs_type == 3 && multipliers.size > 1
   end
 
-  # Return the multipliers that should appear in the final text.
+  # Return the target values that should appear in the final text.
   # In the 3v3 compact format, x1 can be hidden if SHOW_WHEN_NEUTRAL is false.
-  # @param multipliers [Array<Float>]
+  # Hidden targets keep their "?" placeholder.
+  # @param multipliers [Array<Float, nil>]
   # @param logic [Battle::Logic, nil]
-  # @return [Array<Float>]
+  # @return [Array<Float, nil>]
   def displayed_multipliers_for(multipliers, logic)
     return multipliers unless compact_variable_text?(multipliers, logic)
     return multipliers if SHOW_WHEN_NEUTRAL
@@ -214,13 +250,18 @@ module EffectivenessPreview
   end
 
   # Return the background frame index used by the preview spritesheets.
-  # Frame 0 is used for values below x1, frame 1 for x1 or mixed values, and frame 2 for values above x1.
-  # @param multipliers [Array<Float>, nil]
+  # Frame 0 is used for values below x1, frame 1 for x1, mixed or partial values,
+  # and frame 2 for values above x1.
+  # @param multipliers [Array<Float, nil>, nil]
   # @return [Integer]
   def background_frame_index_for(multipliers)
     return 1 unless multipliers
-    return 0 if multipliers.all? { |multiplier| multiplier < 1 }
-    return 2 if multipliers.all? { |multiplier| multiplier > 1 }
+
+    known_multipliers = multipliers.compact
+    return 1 if known_multipliers.empty?
+    return 1 if multipliers.any?(&:nil?)
+    return 0 if known_multipliers.all? { |multiplier| multiplier < 1 }
+    return 2 if known_multipliers.all? { |multiplier| multiplier > 1 }
 
     1
   end
