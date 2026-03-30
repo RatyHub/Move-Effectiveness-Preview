@@ -1,0 +1,10 @@
+--- !ruby/object:PluginManager::Config
+name: move_effectiveness_preview
+authors:
+- Raty
+version: 1.0.0.0
+deps: []
+retry_psdk_compatibility_after_plugin_load: false
+added_files:
+- graphics/interface/battle/button_effectiveness_fixed_preview.png
+- graphics/interface/battle/button_effectiveness_skill_preview.png
