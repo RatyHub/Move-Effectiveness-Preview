@@ -5,7 +5,7 @@
 **FR :** Plugin PSDK qui affiche l'efficacité prévue d'une attaque directement dans l'interface de sélection des capacités pendant le combat.
 
 Il peut fonctionner de deux façons :
-- en affichage fixe sous la liste des capacités
+- en affichage fixe à côté de la liste des capacités
 - ou directement dans chaque bouton de capacité
 
 Le script prend en charge les combats `1v1`, `2v2` et `3v3`, les attaques à cible unique, les attaques à choix de cible et les attaques multi-cibles.
@@ -13,7 +13,7 @@ Le script prend en charge les combats `1v1`, `2v2` et `3v3`, les attaques à cib
 **EN :** PSDK plugin that displays the expected move effectiveness directly in the move selection UI during battle.
 
 It can work in two different ways:
-- as a fixed preview shown under the move list
+- as a fixed preview shown next to the move list
 - or directly inside each move button
 
 The script supports `1v1`, `2v2` and `3v3` battles, single-target moves, target-selection moves and multi-target moves.
