@@ -2,7 +2,7 @@
 name: move_effectiveness_preview
 authors:
 - Raty
-version: 1.1.0.0
+version: 1.2.0.0
 deps: []
 retry_psdk_compatibility_after_plugin_load: false
 added_files:

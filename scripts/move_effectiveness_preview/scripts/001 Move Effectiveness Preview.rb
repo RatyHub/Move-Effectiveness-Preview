@@ -22,6 +22,8 @@ module EffectivenessPreview
   DISPLAY_MODE = 2
   # Show or hide the neutral preview "Efficace (x1)" in every display mode.
   SHOW_WHEN_NEUTRAL = false
+  # Show or hide the status preview in every display mode.
+  SHOW_WHEN_STATUS = false
   # Limit the preview to specific Pokedex states:
   # :ALL = always show the preview
   # :SEEN = only show it for creatures already seen
@@ -31,6 +33,8 @@ module EffectivenessPreview
   TEXT_COLOR = 9
   # Label used when different targets have different multipliers.
   VARIABLE_TEXT = 'Variable'
+  # Label used for status moves.
+  STATUS_TEXT = { 'fr' => 'Statut', 'en' => 'Status' }.freeze
 
   #--------------------------------------------------------------------------
   # Display mode 1 settings
@@ -115,7 +119,7 @@ module EffectivenessPreview
   # @return [Array<Float, nil>, nil]
   def multipliers_for(move, user, logic)
     return unless move && user && logic
-    with_silent_move_logs do
+    with_silent_preview_side_effects do
       targets = preview_targets(move, user, logic)
       next if targets.empty?
 
@@ -157,6 +161,23 @@ module EffectivenessPreview
     ext_text(8999, 22)
   end
 
+  # Return the localized status label.
+  # @return [String]
+  def status_text
+    STATUS_TEXT.fetch($options&.language, STATUS_TEXT.fetch('en'))
+  end
+
+  # Build the status preview text.
+  # Returns nil when status previews are disabled or the move is not a status move.
+  # @param move [Battle::Move, nil]
+  # @return [String, nil]
+  def status_text_for(move)
+    return unless move&.status?
+    return unless SHOW_WHEN_STATUS
+
+    status_text
+  end
+
   # Build the final preview text from the target values list.
   # Hidden targets are shown as "?" while keeping the real target order.
   # In 3v3, mixed values use a compact "x1 / x2 / x4" format to save space.
@@ -188,16 +209,19 @@ module EffectivenessPreview
     formatted.empty? ? '0' : formatted
   end
 
-  # Execute a preview calculation without emitting Battle::Move debug data logs.
-  # This only affects the UI preview and does not change battle logs elsewhere.
+  # Execute a preview calculation without emitting battle-side preview effects.
+  # This only affects the UI preview and does not change normal battle behaviour.
   # @yieldreturn [Object]
   # @return [Object]
-  def with_silent_move_logs
-    previous = $effectiveness_preview_silent_move_logs
+  def with_silent_preview_side_effects
+    previous_move_logs = $effectiveness_preview_silent_move_logs
+    previous_battle_visuals = $effectiveness_preview_silent_battle_visuals
     $effectiveness_preview_silent_move_logs = true
+    $effectiveness_preview_silent_battle_visuals = true
     yield
   ensure
-    $effectiveness_preview_silent_move_logs = previous
+    $effectiveness_preview_silent_move_logs = previous_move_logs
+    $effectiveness_preview_silent_battle_visuals = previous_battle_visuals
   end
 
   # Build the preview text shared by every display mode.
@@ -207,6 +231,8 @@ module EffectivenessPreview
   # @param logic [Battle::Logic, nil]
   # @return [String, nil]
   def preview_text_for(move, user, logic)
+    return status_text_for(move) if move&.status?
+
     multipliers = multipliers_for(move, user, logic)
     return unless multipliers
 
@@ -219,8 +245,10 @@ module EffectivenessPreview
   # @param move [Battle::Move, nil]
   # @param user [PFM::PokemonBattler, nil]
   # @param logic [Battle::Logic, nil]
-  # @return [Array<Array<Float>, String>, Array<Array<Float>, nil>, Array(nil, nil)]
+  # @return [Array<Array<Float>, String>, Array<Array<Float>, nil>, Array(nil, String), Array(nil, nil)]
   def preview_data_for(move, user, logic)
+    return [nil, status_text_for(move)] if move&.status?
+
     multipliers = multipliers_for(move, user, logic)
     return [nil, nil] unless multipliers
 
@@ -312,6 +340,23 @@ module Battle
     end
 
     prepend EffectivenessPreviewSilentLogPatch
+  end
+
+  class Visual
+    module EffectivenessPreviewSilentVisualPatch
+      # Silence ability animations while the effectiveness preview is being computed.
+      # Some immunity hooks rely on show_ability returning a truthy value.
+      # @param target [PFM::PokemonBattler]
+      # @param no_go_out [Boolean]
+      # @return [Boolean, Object]
+      def show_ability(target, no_go_out = false)
+        return true if $effectiveness_preview_silent_battle_visuals
+
+        super
+      end
+    end
+
+    prepend EffectivenessPreviewSilentVisualPatch
   end
 end
 
