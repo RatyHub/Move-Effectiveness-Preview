@@ -26,6 +26,7 @@ The script supports `1v1`, `2v2` and `3v3` battles, single-target moves, target-
 - En `DISPLAY_MODE = 2`, le script affiche l'aperçu directement dans chaque bouton de capacité.
 - En `DISPLAY_MODE = 0`, le script n'affiche rien du tout.
 - Si une attaque est neutre, l'affichage dépend de `SHOW_WHEN_NEUTRAL`.
+- Si une attaque est une attaque de statut, l'affichage dépend de `SHOW_WHEN_STATUS` : soit aucun aperçu ne s'affiche, soit le texte configuré par `STATUS_TEXT` est affiché.
 - L'affichage peut aussi être limité avec `SHOW_FOR_CREATURES` : `:ALL`, `:SEEN` ou `:CAUGHT`.
 - Si un Pokémon adverse prévisualisé ne respecte pas le critère choisi, il est remplacé par `?` tant qu'au moins une autre cible autorisée peut être affichée.
 - Si aucune cible prévisualisée ne respecte le critère choisi, aucun aperçu ne s'affiche.
@@ -43,6 +44,7 @@ The script supports `1v1`, `2v2` and `3v3` battles, single-target moves, target-
 - In `DISPLAY_MODE = 2`, the preview is shown directly inside each move button.
 - In `DISPLAY_MODE = 0`, the script is fully disabled.
 - If a move is neutral, its visibility depends on `SHOW_WHEN_NEUTRAL`.
+- If a move is a status move, its visibility depends on `SHOW_WHEN_STATUS`: either no preview is shown, or the text configured by `STATUS_TEXT` is displayed.
 - The preview can also be limited with `SHOW_FOR_CREATURES`: `:ALL`, `:SEEN` or `:CAUGHT`.
 - If a previewed opposing Pokemon does not match the selected rule, it is replaced with `?` as long as at least one allowed target can still be shown.
 - If none of the previewed targets match the selected rule, no preview is shown.
@@ -81,7 +83,7 @@ Les deux assets de fond sont prévus comme des spritesheets verticales à 3 fram
 | Frame | Utilisation |
 | --- | --- |
 | 1 | efficacité inférieure à `x1` |
-| 2 | `x1` ou cas mixte / variable |
+| 2 | `x1`, cas mixte / variable ou attaque de statut |
 | 3 | efficacité supérieure à `x1` |
 
 ### EN
@@ -91,7 +93,7 @@ Both background assets are expected to be vertical 3-frame spritesheets:
 | Frame | Usage |
 | --- | --- |
 | 1 | effectiveness below `x1` |
-| 2 | `x1` or mixed / variable case |
+| 2 | `x1`, mixed / variable case or status move |
 | 3 | effectiveness above `x1` |
 
 ## Configuration
@@ -106,9 +108,11 @@ Les constantes de configuration se trouvent au début du script `001 Move Effect
 | --- | --- |
 | `DISPLAY_MODE` | Mode d'affichage : `0` désactive le script, `1` affiche un preview fixe, `2` affiche un preview dans chaque bouton de capacité. |
 | `SHOW_WHEN_NEUTRAL` | Indique si les cas neutres (`x1`) doivent être affichés. S'applique aux deux modes. |
-| `SHOW_FOR_CREATURES` | Limite l'affichage selon le Pokédex : `:ALL`, `:SEEN` ou `:CAUGHT`. Si une cible prévisualisée ne respecte pas ce réglage, aucun aperçu ne s'affiche. |
+| `SHOW_WHEN_STATUS` | Indique si les attaques de statut doivent afficher un aperçu. Si `false`, aucun asset ni texte n'est affiché pour ces attaques. |
+| `SHOW_FOR_CREATURES` | Limite l'affichage selon le Pokédex : `:ALL`, `:SEEN` ou `:CAUGHT`. Si une cible prévisualisée ne respecte pas ce réglage, elle est affichée avec `?`; si aucune cible ne respecte le réglage, aucun aperçu ne s'affiche. |
 | `TEXT_COLOR` | Couleur du texte utilisée pour l'aperçu dans les deux modes. |
 | `VARIABLE_TEXT` | Label utilisé pour les cas variables en `1v1` et `2v2`. |
+| `STATUS_TEXT` | Labels utilisés pour les attaques de statut selon la langue du jeu, par exemple `Statut` en français et `Status` en anglais. |
 
 #### Réglages du mode 1
 
@@ -130,9 +134,11 @@ Si vous souhaitez modifier ces constantes, la bonne pratique est de faire un mon
 module EffectivenessPreview
   remove_const(:DISPLAY_MODE)
   remove_const(:SHOW_WHEN_NEUTRAL)
+  remove_const(:SHOW_WHEN_STATUS)
   remove_const(:SHOW_FOR_CREATURES)
   remove_const(:TEXT_COLOR)
   remove_const(:VARIABLE_TEXT)
+  remove_const(:STATUS_TEXT)
   remove_const(:BACKGROUND_IMAGE)
   remove_const(:BACKGROUND_POSITION)
   remove_const(:MODE_2_BACKGROUND_IMAGE)
@@ -140,9 +146,11 @@ module EffectivenessPreview
 
   DISPLAY_MODE = 2
   SHOW_WHEN_NEUTRAL = false
+  SHOW_WHEN_STATUS = false
   SHOW_FOR_CREATURES = :CAUGHT
   TEXT_COLOR = 9
   VARIABLE_TEXT = 'Variable'
+  STATUS_TEXT = { 'fr' => 'Statut', 'en' => 'Status' }.freeze
   BACKGROUND_IMAGE = 'battle/button_effectiveness_fixed_preview'
   BACKGROUND_POSITION = [2, 188]
   MODE_2_BACKGROUND_IMAGE = 'battle/button_effectiveness_skill_preview'
@@ -160,9 +168,11 @@ The configuration constants are located at the top of the script `001 Move Effec
 | --- | --- |
 | `DISPLAY_MODE` | Display mode: `0` disables the script, `1` shows a fixed preview, `2` shows a preview inside each move button. |
 | `SHOW_WHEN_NEUTRAL` | Tells whether neutral cases (`x1`) should be shown. Applies to both modes. |
-| `SHOW_FOR_CREATURES` | Limits the preview according to the Pokedex: `:ALL`, `:SEEN` or `:CAUGHT`. If a previewed target does not match this rule, no preview is shown. |
+| `SHOW_WHEN_STATUS` | Tells whether status moves should show a preview. If `false`, no asset or text is shown for these moves. |
+| `SHOW_FOR_CREATURES` | Limits the preview according to the Pokedex: `:ALL`, `:SEEN` or `:CAUGHT`. If a previewed target does not match this rule, it is displayed as `?`; if no target matches the rule, no preview is shown. |
 | `TEXT_COLOR` | Text color used by the preview in both modes. |
 | `VARIABLE_TEXT` | Label used for variable cases in `1v1` and `2v2`. |
+| `STATUS_TEXT` | Labels used for status moves according to the game language, for example `Statut` in French and `Status` in English. |
 
 #### Display mode 1 settings
 
@@ -184,9 +194,11 @@ If you want to modify these constants, the recommended approach is to use a monk
 module EffectivenessPreview
   remove_const(:DISPLAY_MODE)
   remove_const(:SHOW_WHEN_NEUTRAL)
+  remove_const(:SHOW_WHEN_STATUS)
   remove_const(:SHOW_FOR_CREATURES)
   remove_const(:TEXT_COLOR)
   remove_const(:VARIABLE_TEXT)
+  remove_const(:STATUS_TEXT)
   remove_const(:BACKGROUND_IMAGE)
   remove_const(:BACKGROUND_POSITION)
   remove_const(:MODE_2_BACKGROUND_IMAGE)
@@ -194,9 +206,11 @@ module EffectivenessPreview
 
   DISPLAY_MODE = 2
   SHOW_WHEN_NEUTRAL = false
+  SHOW_WHEN_STATUS = false
   SHOW_FOR_CREATURES = :CAUGHT
   TEXT_COLOR = 9
   VARIABLE_TEXT = 'Variable'
+  STATUS_TEXT = { 'fr' => 'Statut', 'en' => 'Status' }.freeze
   BACKGROUND_IMAGE = 'battle/button_effectiveness_fixed_preview'
   BACKGROUND_POSITION = [2, 188]
   MODE_2_BACKGROUND_IMAGE = 'battle/button_effectiveness_skill_preview'
